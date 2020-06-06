@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 #library(shiny)
-#library(shinythemes)
+library(shinythemes)
 #library(rgdal)  ## rgdal has issues with linux, can get it working here, but docker is another matter
 
 # Retrieve Data ####
