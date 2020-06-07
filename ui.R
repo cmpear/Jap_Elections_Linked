@@ -17,7 +17,8 @@ shinyUI(fluidPage(
     sidebarPanel(h1("Electoral Cooperation in Japan: 1996-2017"),
       fluidRow(
         actionButton("save","Save"),
-        actionButton("map12","Change Map")),        
+#        actionButton("map12","Change Map")
+        ),        
       selectInput("year", 
                   label = "Choose a year to display",
                   choices = c(1996,2000,2003,2005,2009,2012,2014,2017),
