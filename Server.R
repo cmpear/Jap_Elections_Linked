@@ -1,5 +1,6 @@
 #!/usr/bin/env Rscript
-
+library(rgdal)
+library(leaflet)
 #library(shiny)
 ## ENCODE & DECODE FUNCTIONS #####################
 kencode<-function(d){
@@ -126,59 +127,23 @@ ternary.cc<-function(year,a1,a2,a3=NULL,hyp=TRUE,eff=1,mar=10){
 }
 
 ## MAP FUNCTIONS ####
-# merge_map<-function(d,d.criteria,col=hcl(240/9 * 1:9),fixedPR=FALSE){
-#   # d is a dataframe, c1=criteria, c2=data for ken
-#   # originally had an input for map data, but decided this would be faster if I just used global variable japgeo
-#   # the return vaue for this should be a matrix with c1=data and c2=colors; should be sorted to match ken.japgeo)
-#   #NOTE: japgeo prefectures are not only out of order, but entries for the same prefecture are not even all next to each other
-#   
-#   #  d<-jElections[jElections$party==1 & jElections$year==2005 & jElections$dist==1,c(2,13)]
-#   u.rows<-NROW(unique(d[,2]))
-#   # c1=min, c2=color
-#   ncolors<-NROW(col)
-#   iro<-matrix(data=NA,nrow=ncolors,ncol=2)
-#   iro[,2]<-col
-#   if (fixedPR){
-#     iro[,1]<-c(0,0.10,0.20,5:10*5/100)
-#   }else if (u.rows==ncolors){
-#     start<-0
-#     for (i in 1:u.rows)
-#     {
-#       iro[i,1]<-as.numeric(unique(d[,2])[i])
-#     }
-#   }else if (u.rows>ncolors){
-#     start<-min(d[,2])
-#     gap<-(range(d[,2])[2]-range(d[,2])[1])/(ncolors)
-#     for (i in 1:ncolors)
-#     {
-#       iro[i,1]<-start + gap * (i-1)
-#     }
-#   }
-#   d.return<-as.data.frame(matrix(data=NA,ncol=2,nrow=NROW(japgeo)))
-#   for (i in 1:47)
-#   {
-#     logi<-(ken.japgeo==i)
-#     logi2<-d[,1]==i
-#     if (NROW(d[logi2,2])==0) {
-#       d.return[logi,1]<-0
-#       d.return[logi,2]<-    iro[sum (start>=iro[,1]),2]      
-#     }
-#     else {
-#       d.return[logi,1]<-d[logi2,2]
-#       d.return[logi,2]<-    iro[sum (d[logi2,2]>=iro[,1]),2]      
-#     }
-#   }
-#   return(d.return)
-# }
+
+BuildMapData <- function(data, mInput){
+  rValue <- (as.data.frame( cbind( unique(data[,2]),
+                               tapply(data[,3 + mInput %% 2],data[,2],FUN="mean" ),
+                               tapply(as.numeric(
+                                 data[,3+mInput %% 2] > data[,3+ (mInput + 1) %% 2] &
+                                   data[,3+mInput %% 2] > data[,5] ),
+                                 data[,2],FUN="sum" ),
+                               table(data[,2] )
+                               )  )  )
+  rValue <- cbind(rValue, rValue[,3] / rValue[,4])
+  names(rValue) <- c('ID', 'SHARE', 'WINS', 'SEATS', 'WIN_SHARE')
+  return(rValue)
+}
 
 ## FUNCTIONS FOR REARRANGING ELECTION DATA ################################
 #Given a party, year, and list of IDs, returns 
-ppvs.vector<-function(party,ID,PR=FALSE){
-  if (PR){
-    return(unlist(mapply(FUN="pvs.pr",party=party,id=ID)))
-  }
-  return(unlist(mapply(FUN="pvs",party=party,id=ID)))
-}
 ppvs.matrix<-function(PARTY,year,PR=TRUE,restrict=FALSE,blankcol=0){
   # restrict determines whether only districts where one of the parties won should be included
   if (is.null(PARTY)){
@@ -233,7 +198,6 @@ ppvs.matrix<-function(PARTY,year,PR=TRUE,restrict=FALSE,blankcol=0){
 }
 pvs<-function(party,id){
   v<-jElections$vshare[jElections$id==id & jElections$party==party]
-  #This is a temporary solution to cases where there are multiple "other" and independent candidates
   if (NROW(v)>1){v<-max(v)}
   if (NROW(v)>0){return(v)}
   return(0)
@@ -247,36 +211,32 @@ pvs.pr<-function(party,id){
 }
 
 
-##############################################################################################################
-##############################################################################################################
 
 ## RETRIEVE DATA #############################################################################################
 # having trouble with data-loading later on, so moving data-loading here
 # original problem seems to have been some random characters that got inserted into a function, but still makes more sense to load data and use as globals.
-ken.codex<-read.delim( "https://raw.githubusercontent.com/cmpear/Japanese_Elections/master/data/kenCodex.csv",sep=",",stringsAsFactors=FALSE)
-jElections<-read.csv( "https://raw.githubusercontent.com/cmpear/Japanese_Elections/master/data/smdResults.csv",sep=",",stringsAsFactors=FALSE)
-jpr<-read.delim( "https://raw.githubusercontent.com/cmpear/Japanese_Elections/master/data/prResults.csv",sep=",",stringsAsFactors=FALSE)[,-1]
-jcode<-read.delim( "https://raw.githubusercontent.com/cmpear/Japanese_Elections/master/data/PartyCodex.csv",sep=",",stringsAsFactors=FALSE)
+ken.codex<-read.delim( "Data/kenCodex.csv",sep=",",stringsAsFactors=FALSE)
+jElections<-read.csv( "Data/smdResults.csv",sep=",",stringsAsFactors=FALSE)
+jpr<-read.delim( "Data/prResults.csv",sep=",",stringsAsFactors=FALSE)[,-1]
+jcode<-read.delim( "Data/PartyCodex.csv",sep=",",stringsAsFactors=FALSE)
 jcode<-rbind(jcode,c(100,"NOO","The FAKE Party","MU","",""))
 jcode[,1]<-as.numeric(jcode[,1])
-#jElections<-rbind(jElections,data.frame("id"=c(144794+1:5),"pref"=rep(47,5),"dist"= c(94+1:5),"n.can"= rep(1,5),"win"= rep(2,5),
-#          "candidate"= rep("",5),"party"= rep(100,5),"inc"= rep(0,5),"dual"=rep(0,5),"votes"=rep(0,5),
-#          "age"=rep(0,5),"turnout"=rep(0,5),"vshare"=rep(0,5),"place"=rep(1,5),"margin"=rep(0,5),"year"=rep(2014,5)))
 
 # Adding dud data that should be automatically excluded to deal with a problem that seems unique to Shiny
 
+japgeo<-readOGR(dsn="Data/jpmap/jp_grid_ken_pgn.shp",stringsAsFactors = FALSE)
+japgeo$NAME2[japgeo$NAME2=="Gumma"]<-"Gunma"
+japgeo$NAME2[japgeo$NAME2=="Okajama"]<-"Okayama"
+japgeo$NAME2[japgeo$NAME2=="Tshiba"]<-"Chiba"
+# remove potential controversy over two disputed islands in the Sea of Japan (or East Sea if you're Korean)
+japgeo <- japgeo[!(japgeo$NAME2 == 'Shimane' & (japgeo$RPOLY_ == 3141 | japgeo$RPOLY_ == 3156 ) ), ]
+ID <- unlist(kencode(japgeo$NAME2))
+japgeo@data <- cbind(japgeo@data, ID )
 
-# japgeo<-readOGR(dsn=file.path(path, "data/jpmap/jp_grid_ken_pgn.shp"),stringsAsFactors = FALSE)
-# japgeo$NAME2[japgeo$NAME2=="Gumma"]<-"Gunma"
-# japgeo$NAME2[japgeo$NAME2=="Okajama"]<-"Okayama"
-# japgeo$NAME2[japgeo$NAME2=="Tshiba"]<-"Chiba"
-# ken.japgeo<-unlist(kencode(japgeo$NAME2))
-#file.path(getwd(), 'R' )
-#print(path)
+rm(ID)
 
-##############################################################################################################
-##############################################################################################################
-
+#ken.japgeo<-unlist(kencode(japgeo$NAME2))
+# can replace with more efficient code...just an array of ints with row-names of prefectures
 ## graph adjustment variables ####
 bw<-0.3; tp<-0.25
 # tbar
@@ -323,22 +283,11 @@ shinyServer(function(input, output, session) {
                          paste(input$year,"Average District Support for",names(cc())[4]))
     })
 
-########################################################################################################################################################################
-########################################################################################################################################################################
-########################################################################################################################################################################
-
   output$ternaryPlot <- renderPlot({
     main<-paste0(input$year," District Race Results",rep(paste0("\n",input$eff*100,"% efficiency"),input$eff!=0))
 ## ternary 2 butchered ####
-#    ternary2<-function(cc,main="",legend=FALSE)
-      #  x<-c(1,0,0);y<-c(0,1,0);z<-c(0,0,1)
       iro <- hcl(h = 15 + 90 * 1:4, alpha = 0.3)
       iro_opaque <- hcl(h = 15 + 90 * 1:4)
-#      pch<-c(0,1,5,7,10,9)
-#      cex<-c(0.9,1.2,1.0,1.0,1.3,1.0)
-#      pch<-rep(19,6)
-#      cex<-rep(1,6)
-      # i=up; j=down and left; k = down and right
 
       a<-0.9
       i<-c(0,sqrt(3)/3)*a;j<-c(-0.5,-sqrt(3)/6)*a;k<-c(0.5,-sqrt(3)/6)*a
@@ -386,7 +335,7 @@ shinyServer(function(input, output, session) {
           par (col=iro[4])      } # GREEN
         points(p[1],p[2],cex=2,pch=19)
       }
-      ## THE LEGEND ####
+      ## THE LEGEND
       par (col=iro[1],pch=19)
       points(0.02,0.9)
       text(0.06,0.9,labels="Majority",pos=4, col = iro_opaque[1])
@@ -399,10 +348,7 @@ shinyServer(function(input, output, session) {
       par (col=iro[4])
       points(0.02,0.75)
       text(0.06,0.75,labels=paste(names(cc() )[5],"Plurality"),pos=4, col = iro_opaque[4])
-      ## tbar butchered ####
-      #    tbar<-function(cc=-1,party=-1,
-      #                   col=c("purple","blue","red","green"),
-      #                   frame=c(1,0.35,-0.15,2,-0.2,1.7),fixed=TRUE){
+      ## tbar butchered 
       #Frame: Quadrant, Scale, xmin,xmax,ymin,ymax
       frame<-c(1,0.35,0,1,0,0.85); fixed<-TRUE
       col<-hcl(h = 15 + 90 * 1:4, alpha = 0.5)
@@ -421,8 +367,6 @@ shinyServer(function(input, output, session) {
         wl[3,i]<-sum(wl[2,]) - sum(wl[1,-i])  # All victories for all parties - Enemy Majorities
       }
       
-      # frame =c(quadrant, shrink factor, x0, x1, y0, y1)
-      #  frame=c(1,0.35,-0.15,2,-0.2,1.7)
       x.space<-(frame[4]-frame[3])*frame[2]
       y.space<-(frame[6]-frame[5])*frame[2]
       #Have yet to allow placement in other quadrants
@@ -457,26 +401,62 @@ shinyServer(function(input, output, session) {
       text(x=x.low+(1:3)*x.reduce,y=y.low,labels=alliance.shorten(names(wl)),pos=1,cex=.9,col="black")
       text(x=x.low+mean(1:3)*x.reduce,y=y.low,labels="\n* With Winnable Losses",pos=1,cex=.7,col="black")
       text(x=x.low+.8*x.reduce,y=y.low,labels=0,pos=2,col="black",cex=0.7)
-## END TERNARY FUNCTIONS ####
   })
-  # output$map.plot <-renderPlot({
-  #   # show support levels for alliance 1
-  #   iro<-hcl(240/9 * 1:9)
-  #   d<-merge_map(d=cbind(unique(cc()[,2]),
-  #                        tapply(cc()[,3+input$map12%%2],cc()[,2],FUN="mean")),
-  #                "pref",col=iro,fixedPR=TRUE)
-  #   #    start<-min(d[,2])
-  #   #    gap<-(range(d[,2])[2]-range(d[,2])[1])/(ncolors)
-  #   main<-paste(input$year,"Average District Support for",names(cc())[3+input$map12%%2])
-  #   scale<-c("00%<=support<10%","10%<=support<20%","20%<=support<25%","25%<=support<30%","30%<=support<35%","35%<=support<40%","40%<=support<45%","45%<=support<50%","50%<=support")
-  #   plot(japgeo,col=d[,2],main=main)
-  #   text(121,46:38,pos=4,labels=scale)
-  #   points(rep(120,9),46:38,pch=22,bg=iro,col="black",cex=1.5)
-  # })
+  
+#  MAP OUTPUT I ####
+  output$map.plot <-renderLeaflet({
+    
+    # Should the map show the current state, the saved state, or a comparison of the states
+    if (input$map13 %% 3 == 0){
+      target_alliance <- names( cc() )[3+input$map12 %% 2]
+      temp <- BuildMapData(cc(), input$map12 %% 2  )
+      change <- NULL
+    }
+    else if (input$map13 %% 3 == 1){
+      target_alliance <- names( saved )[3+input$map12 %% 2]
+      temp <- BuildMapData( saved, input$map12 %% 2  )
+      change <- NULL
+    }
+    else{
+      target_alliance <- names( cc() )[3+input$map12 %% 2]
+      temp <- BuildMapData(cc(), input$map12 %% 2 )
+      savadata <- BuildMapData( saved, input$map12 %% 2  )
+      temp[,c('SHARE','WINS','SEATS','WIN_SHARE')] <- savadata[,c('SHARE','WINS','SEATS','WIN_SHARE')] - temp[,c('SHARE','WINS','SEATS','WIN_SHARE')]
+      rm(savadata)
+      change <- 'Change '
+    }
+    # For data, cc[,2] is the prefecture and cc[,3 + XYZ] is the vote-share of the relevant coalition, column one and two
+    data <- japgeo
+    data@data <- merge(data@data, temp, by = 'ID' )
+    rm(temp)
+    mypalette <- leaflet::colorNumeric(palette = 'magma',
+                                       domain = jElections$vshare[jElections$party== (1 +input$map12 %% 2 ) ] , na.color = 'transparent', alpha = 1)
 
-########################################################################################################################################################################
-########################################################################################################################################################################
-########################################################################################################################################################################
+    # should the map focus on the vote share or the seat share:    
+    map_type <- (input$map14 %% 2 == 0)
+    if (map_type) main <- paste0(target_alliance, ' Vote Share ',change, '(%)')
+    else main <- paste0(target_alliance, ' Seat Share ', change, '(%)')
+
+    # leaflet is built for use with piping...it can be used without it, but the result is a bit ugly.  However, this is meant to run on a small server
+    # and dplyr is a resource-hungry installation
+    setView( 
+      addLegend(
+        addPolygons(
+          addProviderTiles(
+            leaflet(data),
+            providers$Stamen.Toner ),
+          fillColor = ~mypalette(SHARE * map_type + WIN_SHARE * !map_type), fillOpacity = 0.7, weight = 1,
+          popup = ~ paste( sep = "<br/>",
+                           paste0('<b>',toupper(NAME2),'</b>'),
+                           paste0('<b>',change, 'Seats: </b>',  as.character(SEATS) ),
+                           paste0('<b>',change, target_alliance, ' Wins:</b>', as.character(WINS) ),
+                           paste0('<b>',change, target_alliance, ' Vote Share:</b> ' , as.character( round(SHARE * 100, 2)  ), '%' )
+                           )
+          ), pal = mypalette, values = ~ (SHARE * map_type + WIN_SHARE * !map_type), title = main, position = 'topleft'
+        ), lng = 136.86, lat = 36.34, zoom = 6)
+
+  })
+
 
   observeEvent(input$save,{
    output$ternaryPlot.saved <- renderPlot({
@@ -554,9 +534,6 @@ shinyServer(function(input, output, session) {
     text(0.06,0.75,labels=paste(names(saved)[5],"Plurality"),pos=4, col = iro_opaque[4])
     
     ## tbar butchered ####
-    #    tbar<-function(cc=-1,party=-1,
-    #                   col=c("purple","blue","red","green"),
-    #                   frame=c(1,0.35,-0.15,2,-0.2,1.7),fixed=TRUE){
     frame<-c(1,0.35,0,1,0,0.85); fixed<-TRUE
     col<-hcl(15 + 90 * 1:4, alpha = 0.5)
     iro<-matrix(data=NA,nrow=3,ncol=3)
@@ -611,19 +588,9 @@ shinyServer(function(input, output, session) {
 #    last.cc<<-cc
     ## END TERNARY FUNCTIONS ####
     })
-   # output$map.plot.saved <-renderPlot({
-   #   iro<-hcl(240/9 * 1:9)
-   #   d<-merge_map(d=cbind(unique(saved[,2]),
-   #                        tapply(saved[,3+input$map12%%2],saved[,2],FUN="mean")),
-   #                "pref",col=iro,fixedPR=TRUE)
-   #   #    start<-min(d[,2])
-   #   #    gap<-(range(d[,2])[2]-range(d[,2])[1])/(ncolors)
-   #   scale<-c("00%<=support<10%","10%<=support<20%","20%<=support<25%","25%<=support<30%","30%<=support<35%","35%<=support<40%","40%<=support<45%","45%<=support<50%","50%<=support")
-   #   plot(japgeo,col=d[,2],main=saved.plot.title[1+input$map12%%2])
-   #   text(121,46:38,pos=4,labels=scale)
-   #   points(rep(120,9),46:38,pch=22,bg=iro,col="black",cex=1.5)
-   #        #  abline(h=24:46); abline(v=113:156)
-   # })
+# MAP OUTPUT II  ####
+  # shiny does not seem to like simultaneous leaflet
+  # also, two leaflet maps next to each other would be a bit ugly 
   })
 })
 

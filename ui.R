@@ -1,12 +1,7 @@
 #!/usr/bin/env Rscript
-
-#library(shiny)
+library(leaflet)
 library(shinythemes)
-#library(rgdal)  ## rgdal has issues with linux, can get it working here, but docker is another matter
 
-# Retrieve Data ####
-#jcode<-read.delim(file.path(path, 'Data/PartyCodex.csv'),sep=",",stringsAsFactors=FALSE)
-#print.table(jcode)
 # SHINY CODE ####
 
 shinyUI(fluidPage(
@@ -17,7 +12,9 @@ shinyUI(fluidPage(
     sidebarPanel(h1("Electoral Cooperation in Japan: 1996-2017"),
       fluidRow(
         actionButton("save","Save"),
-#        actionButton("map12","Change Map")
+        actionButton("map12","Change Alliance Focus"),
+        actionButton("map13","Current / Saved / Saved - Current"),
+        actionButton("map14","Seats / Votes")
         ),        
       selectInput("year", 
                   label = "Choose a year to display",
@@ -26,7 +23,6 @@ shinyUI(fluidPage(
       sliderInput("eff",
                   "Alliance Efficiency",
                   min=0,max=1,value=0),
-# 2017 does not work...unsure why   
     fluidRow(
       column(4,
       checkboxGroupInput("a1", 
@@ -62,13 +58,13 @@ shinyUI(fluidPage(
         column(6,
           plotOutput("ternaryPlot.saved",height=600,width=600))
       )
-      # ,
-      # fluidRow(
-      #   column(6,
-      #          plotOutput("map.plot",height=600,width=600)),
-      #   column(6,
-      #          plotOutput("map.plot.saved",height=600,width=600))
-      # )
+      ,fluidRow(
+       column(6,
+              leafletOutput("map.plot",height=1200,width=1200))
+#       ,
+#       column(6,
+#              leafletOutput("map.plot.saved",height=600,width=600))
+      )
     )
   )
 ))
