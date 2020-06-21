@@ -9,20 +9,21 @@ shinyUI(fluidPage(
   
 
   sidebarLayout(
-    sidebarPanel(h1("Electoral Cooperation in Japan: 1996-2017"),
+    sidebarPanel(
+      h1("Electoral Cooperation in Japan: 1996-2017"),
       fluidRow(
-        actionButton("save","Save"),
-        actionButton("map12","Change Alliance Focus"),
-        actionButton("map13","Current / Saved / Saved - Current"),
-        actionButton("map14","Seats / Votes")
-        ),        
-      selectInput("year", 
+        helpText('This app is built to examine electoral data in Japan, and model hypothetical alliances between political parties.')
+        ),
+      selectInput("year",
                   label = "Choose a year to display",
                   choices = c(1996,2000,2003,2005,2009,2012,2014,2017),
                   selected = 2005),
       sliderInput("eff",
                   "Alliance Efficiency",
                   min=0,max=1,value=0),
+      fluidRow(
+        helpText('Alliance Efficiency determines how many net votes flow from the weaker ally to the stronger in each district.  At zero (the default), no votes transfer.')
+    ),
     fluidRow(
       column(4,
       checkboxGroupInput("a1", 
@@ -40,18 +41,22 @@ shinyUI(fluidPage(
                                 choices = "Japanese Communist Party",
                                 selected = character(0)))
       ),
-    helpText("This app allows the user to see how up to 3 hypothetical alliances could have performend 
-             in Japanese lower house elections from 1996 to 2017.  By default, the first two alliances 
-             are set to historic alliances for that year.  If no members are selected for the third alliance, 
-             it defaults to the best outside candidate.  By default, alliance efficiency is set to zero.  
-             This does not mean that the alliance does not work, but rather that in each district where 
-             two alliance candidates ran against one another, neither stepped down (the historic case).  
-             For all positive values, alliance efficiency represents the net share of their votes that go 
-             to the strongest candidate.  The save function is for comparing the current plot to future plots.")
-),
-    
+      helpText("Set up to three alliances.  By default, these are set to historical alliances for the given year.
+               If no parties are provided for alliance-3, it defaults to the best candidate outside of the first two alliances."),
+    fluidRow(
+      actionButton("save","Save"),
+      actionButton("map12","Change Alliance Focus"),
+      actionButton("map13","Current / Saved / Saved - Current"),
+      actionButton("map14","Seats / Votes")
+    ),
+    fluidRow(
+      helpText("Use 'save' to store one instance for comparison.
+        'Change Alliance Focus' shifts the map from alliance 1 to alliance 2.
+                 'Current / Saved / Saved - Current' shifts the map from showing the current plot data, saved plot data, or comparing the two.
+                 'Seats / Votes' shifts between focusing on seats vs votes")
+    )
+    ),
     mainPanel(
-      
       fluidRow(
         column(6,
           plotOutput("ternaryPlot",height=600,width=600)),
@@ -61,9 +66,6 @@ shinyUI(fluidPage(
       ,fluidRow(
        column(6,
               leafletOutput("map.plot",height=1200,width=1200))
-#       ,
-#       column(6,
-#              leafletOutput("map.plot.saved",height=600,width=600))
       )
     )
   )
