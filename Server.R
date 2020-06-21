@@ -1,16 +1,20 @@
 #!/usr/bin/env Rscript
 library(rgdal)
 library(leaflet)
+library(readr)
 #library(shiny)
 ## ENCODE & DECODE FUNCTIONS #####################
+
+# given prefecture name, returns district id
 kencode<-function(d){
   if (is.numeric(d)){return(d)}
   if (NROW(d)>1)
   {
     return(sapply(d,kencode))
   }
-  return(ken.codex$prefid[ken.codex$pref==d])
+  return(kenCodex$prefid[kenCodex$pref==d])
 }
+# given prefecture id, returns district name
 kdecode<-function(d){
   if (NROW(d)>1)
   {
@@ -18,11 +22,11 @@ kdecode<-function(d){
   }
   if(d>100)
   {
-    return(paste0(ken.codex$pref[ken.codex$prefid==trunc(d/100)],"-",d%%100))
+    return(paste0(kenCodex$pref[kenCodex$prefid==trunc(d/100)],"-",d%%100))
   }
-  return(ken.codex$pref[ken.codex$prefid==d])
+  return(kenCodex$pref[kenCodex$prefid==d])
 }
-
+# given party name, returns party number
 jencode<-function(d,j=FALSE){
   if (is.numeric(d)){return(d)} # In case it is already encoded
   if (is.null(d)){return(d)}
@@ -43,7 +47,9 @@ jencode<-function(d,j=FALSE){
     return(jcode$Party.ID[jcode[,3]==d])
   }
 }
-jdecode<-function(d,full=FALSE,j=FALSE){
+# given party number, returns english or japanese name (Japanese disabled)
+#jdecode<-function(d,full=FALSE,j=FALSE){
+jdecode<-function(d,full=FALSE){
   if(NROW(d)>1)  {
     return(sapply(d,jdecode, full=full))
   }
@@ -51,23 +57,23 @@ jdecode<-function(d,full=FALSE,j=FALSE){
     return(d)
   }
   if(full)  {
-    return(jcode$Full.Name[jcode[,1]==d])
+    return(jcode$Full_Name[jcode[,1]==d])
   }
-  else if (j)  {
-    return(jcode$Japanese.Name[jcode[,1]==d])
-  }
+#  else if (j)  {
+#    return(jcode$Japanese.Name[jcode[,1]==d])
+#  }
   else  {
     return(jcode$Name[jcode[,1]==d])
   }
 }
-
+# given prefecture number, returns block number
 block<-function(d){
   d<-kencode(d)
   if (NROW(d)>1)
   {
     return(sapply(d,block))
   }
-  return(ken.codex$block[ken.codex$prefid==d])
+  return(kenCodex$block[kenCodex$prefid==d])
 }
 ## ALLIANCE HELPER FUNCTIONS ######################
 alliance.depreciate.all<-function(vsmatrix,eff=1){
@@ -215,16 +221,15 @@ pvs.pr<-function(party,id){
 ## RETRIEVE DATA #############################################################################################
 # having trouble with data-loading later on, so moving data-loading here
 # original problem seems to have been some random characters that got inserted into a function, but still makes more sense to load data and use as globals.
-ken.codex<-read.delim( "Data/kenCodex.csv",sep=",",stringsAsFactors=FALSE)
-jElections<-read.csv( "Data/smdResults.csv",sep=",",stringsAsFactors=FALSE)
-jpr<-read.delim( "Data/prResults.csv",sep=",",stringsAsFactors=FALSE)[,-1]
-jcode<-read.delim( "Data/PartyCodex.csv",sep=",",stringsAsFactors=FALSE)
-jcode<-rbind(jcode,c(100,"NOO","The FAKE Party","MU","",""))
-jcode[,1]<-as.numeric(jcode[,1])
+kenCodex <- readr::read_csv('Data/kenCodex.csv', col_names = c('prefid','pref','block','jpref','jblock','pr96','pr00','pr03','pr05','pr09','pr12','pr14','pr17') )
+jElections <- readr::read_csv( "Data/smdResults.csv" )
+jpr <- readr::read_csv( "Data/prResults.csv" )
+jcode <- readr::read_csv( 'Data/PartyCodex.csv', col_types = 'icc' )
+#Adding dud data that should be automatically excluded to deal with a problem that seems unique to Shiny
+# hopefully that problem won't come back...should have left better notes
+#jcode<-rbind(jcode,c(100,"NOO","The FAKE Party"))
 
-# Adding dud data that should be automatically excluded to deal with a problem that seems unique to Shiny
-
-japgeo<-readOGR(dsn="Data/jpmap/jp_grid_ken_pgn.shp",stringsAsFactors = FALSE)
+japgeo<-readOGR(dsn="Data/jpmap/jp_grid_ken_pgn.shp",stringsAsFactors = FALSE, drop_unsupported_fields = TRUE)
 japgeo$NAME2[japgeo$NAME2=="Gumma"]<-"Gunma"
 japgeo$NAME2[japgeo$NAME2=="Okajama"]<-"Okayama"
 japgeo$NAME2[japgeo$NAME2=="Tshiba"]<-"Chiba"
@@ -277,10 +282,12 @@ shinyServer(function(input, output, session) {
     ternary.cc(input$year,input$a1,input$a2,input$a3,hyp=input$eff!=0,eff=input$eff)
   })
   observeEvent( input$save,{
+    print('saving start')
     saved      <<-cc()
     saved.title<<-paste0(input$year," District Race Results",rep(paste0("\n",input$eff*100,"% efficiency"),input$eff!=0))
     saved.plot.title<<-c(paste(input$year,"Average District Support for",names(cc())[3]),
                          paste(input$year,"Average District Support for",names(cc())[4]))
+    print('saving end')
     })
 
   output$ternaryPlot <- renderPlot({
@@ -585,12 +592,8 @@ shinyServer(function(input, output, session) {
     text(x=x.low+(1:3)*x.reduce,y=y.low,labels=alliance.shorten(names(wl)),pos=1,cex=.9,col="black")
     text(x=x.low+mean(1:3)*x.reduce,y=y.low,labels="\n* With Winnable Losses",pos=1,cex=.7,col="black")
     text(x=x.low+.8*x.reduce,y=y.low,labels=0,pos=2,col="black",cex=0.7)
-#    last.cc<<-cc
-    ## END TERNARY FUNCTIONS ####
     })
-# MAP OUTPUT II  ####
-  # shiny does not seem to like simultaneous leaflet
-  # also, two leaflet maps next to each other would be a bit ugly 
+
   })
 })
 
