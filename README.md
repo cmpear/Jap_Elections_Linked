@@ -4,8 +4,7 @@
 
 This is an old Shiny App I built years ago.  This version has been redesigned to run on Amazon Web Services using a Shiny App.  It can be found at:
 
-http://34.213.126.123:3838/Jap_Elections_Linked/
-
+http://34.213.126.123:3838/Jap_Elections_w_Leaflet/
 
 # Explanation
 
